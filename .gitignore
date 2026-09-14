@@ -1,0 +1,11 @@
+# Binaries
+bin/
+/server
+
+# Environment files
+.env
+
+# OS/IDE
+.DS_Store
+.idea/
+.vscode/
