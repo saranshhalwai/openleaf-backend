@@ -4,6 +4,7 @@ bin/
 
 # Environment files
 .env
+crun.service.dev.yaml
 
 # OS/IDE
 .DS_Store
