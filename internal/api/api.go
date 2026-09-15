@@ -9,21 +9,24 @@ import (
 	"github.com/go-chi/cors"
 
 	"openleaf-backend/internal/auth"
+	"openleaf-backend/internal/compilation"
 	"openleaf-backend/internal/files"
 	"openleaf-backend/internal/projects"
 )
 
 type API struct {
-	auth     *auth.Authenticator
-	projects *projects.Service
-	files    *files.Service
+	auth        *auth.Authenticator
+	projects    *projects.Service
+	files       *files.Service
+	compilation *compilation.Service
 }
 
-func New(a *auth.Authenticator, p *projects.Service, f *files.Service) *API {
+func New(a *auth.Authenticator, p *projects.Service, f *files.Service, c *compilation.Service) *API {
 	return &API{
-		auth:     a,
-		projects: p,
-		files:    f,
+		auth:        a,
+		projects:    p,
+		files:       f,
+		compilation: c,
 	}
 }
 
@@ -41,7 +44,7 @@ func (api *API) Router(allowedOrigins []string) http.Handler {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Internal-Token"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
 		MaxAge:           300,
@@ -51,6 +54,9 @@ func (api *API) Router(allowedOrigins []string) http.Handler {
 	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+
+	// Webhook callback endpoint for compiler service (unauthenticated by Better-Auth)
+	r.Post("/api/internal/compile/callback", api.handleCompileCallback)
 
 	// Protected routes
 	r.Route("/api", func(r chi.Router) {
@@ -69,6 +75,14 @@ func (api *API) Router(allowedOrigins []string) http.Handler {
 
 				r.Get("/", api.handleGetProject)
 				r.Delete("/", api.handleDeleteProject)
+
+				// Compilation routes
+				r.Route("/compile", func(r chi.Router) {
+					r.Post("/", api.handleCompileProject)
+					r.Get("/status", api.handleGetCompileStatus)
+					r.Get("/pdf", api.handleGetCompilePDF)
+					r.Get("/log", api.handleGetCompileLog)
+				})
 
 				// File routes within a project
 				r.Route("/files", func(r chi.Router) {

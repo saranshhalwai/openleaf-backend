@@ -36,7 +36,7 @@ func Connect(ctx context.Context, databaseURL string) (*DB, error) {
 	}
 
 	// Ping database
-	pingCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	pingCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 
 	if err := pool.Ping(pingCtx); err != nil {

@@ -41,3 +41,11 @@ spec:
           value: "production"
         - name: ALLOWED_ORIGINS
           value: "https://openleaf.saranshhalwai.me,http://localhost:5173"
+        - name: GCS_BUCKET
+          value: "openleaf-artifacts-openleaf-508614"
+        - name: TASKS_QUEUE
+          value: "projects/openleaf-508614/locations/asia-southeast1/queues/latex-compiles"
+        - name: COMPILER_URL
+          value: "https://openleaf-compiler-17671319887.asia-southeast1.run.app"
+        - name: BACKEND_URL
+          value: "https://openleaf-backend-17671319887.asia-southeast1.run.app"

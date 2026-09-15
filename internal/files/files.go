@@ -73,6 +73,37 @@ func (s *Service) ListFiles(ctx context.Context, projectID string) ([]File, erro
 	return fileList, nil
 }
 
+// ListFilesWithContent returns all files in a project including text content (used for compilation tarball packaging).
+func (s *Service) ListFilesWithContent(ctx context.Context, projectID string) ([]File, error) {
+	query := `
+		SELECT id, project_id, path, is_binary, content, storage_key, created_at, updated_at
+		FROM files
+		WHERE project_id = $1
+		ORDER BY path ASC;
+	`
+
+	rows, err := s.db.Query(ctx, query, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list files with content: %w", err)
+	}
+	defer rows.Close()
+
+	var fileList []File
+	for rows.Next() {
+		var f File
+		if err := rows.Scan(&f.ID, &f.ProjectID, &f.Path, &f.IsBinary, &f.Content, &f.StorageKey, &f.CreatedAt, &f.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan file: %w", err)
+		}
+		fileList = append(fileList, f)
+	}
+
+	if fileList == nil {
+		fileList = []File{}
+	}
+
+	return fileList, nil
+}
+
 // GetFile retrieves a specific file including content
 func (s *Service) GetFile(ctx context.Context, projectID, fileID string) (*File, error) {
 	query := `

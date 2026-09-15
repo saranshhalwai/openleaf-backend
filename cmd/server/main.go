@@ -15,6 +15,7 @@ import (
 
 	"openleaf-backend/internal/api"
 	"openleaf-backend/internal/auth"
+	"openleaf-backend/internal/compilation"
 	"openleaf-backend/internal/database"
 	"openleaf-backend/internal/files"
 	"openleaf-backend/internal/projects"
@@ -33,6 +34,28 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
+
+	gcsBucket := os.Getenv("GCS_BUCKET")
+	if gcsBucket == "" {
+		gcsBucket = "openleaf-artifacts-openleaf-508614"
+	}
+
+	tasksQueue := os.Getenv("TASKS_QUEUE")
+	if tasksQueue == "" {
+		tasksQueue = "projects/openleaf-508614/locations/asia-southeast1/queues/latex-compiles"
+	}
+
+	compilerURL := os.Getenv("COMPILER_URL")
+	if compilerURL == "" {
+		compilerURL = "https://openleaf-compiler-17671319887.asia-southeast1.run.app"
+	}
+
+	backendURL := os.Getenv("BACKEND_URL")
+	if backendURL == "" {
+		backendURL = "https://openleaf-backend-17671319887.asia-southeast1.run.app"
+	}
+
+	internalSecret := os.Getenv("INTERNAL_SECRET")
 
 	originsEnv := os.Getenv("ALLOWED_ORIGINS")
 	var allowedOrigins []string
@@ -67,9 +90,17 @@ func main() {
 	authenticator := auth.NewAuthenticator(db.Pool)
 	projectsService := projects.NewService(db.Pool)
 	filesService := files.NewService(db.Pool)
+	compilationService := compilation.NewService(ctx, db.Pool, filesService, compilation.Config{
+		GCSBucket:      gcsBucket,
+		TasksQueuePath: tasksQueue,
+		CompilerURL:    compilerURL,
+		BackendURL:     backendURL,
+		InternalSecret: internalSecret,
+	})
+	defer compilationService.Close()
 
 	// Build HTTP router
-	apiServer := api.New(authenticator, projectsService, filesService)
+	apiServer := api.New(authenticator, projectsService, filesService, compilationService)
 	router := apiServer.Router(allowedOrigins)
 
 	srv := &http.Server{
