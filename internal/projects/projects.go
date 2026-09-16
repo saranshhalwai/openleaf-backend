@@ -205,3 +205,131 @@ func (s *Service) GetUserRole(ctx context.Context, projectID, userID string) (Ro
 	}
 	return Role(role), nil
 }
+
+type ProjectMember struct {
+	UserID    string    `json:"userId"`
+	Email     string    `json:"email"`
+	Name      string    `json:"name"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// ListProjectMembers returns all members of a project if the requesting user is a member
+func (s *Service) ListProjectMembers(ctx context.Context, projectID, userID string) ([]ProjectMember, error) {
+	_, err := s.GetUserRole(ctx, projectID, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := `
+		SELECT pm.user_id, u.email, u.name, pm.role, pm.created_at
+		FROM project_members pm
+		JOIN "user" u ON pm.user_id = u.id
+		WHERE pm.project_id = $1
+		ORDER BY 
+			CASE pm.role 
+				WHEN 'owner' THEN 1 
+				WHEN 'editor' THEN 2 
+				ELSE 3 
+			END,
+			pm.created_at ASC;
+	`
+	rows, err := s.db.Query(ctx, query, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query project members: %w", err)
+	}
+	defer rows.Close()
+
+	var members []ProjectMember
+	for rows.Next() {
+		var m ProjectMember
+		if err := rows.Scan(&m.UserID, &m.Email, &m.Name, &m.Role, &m.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan project member: %w", err)
+		}
+		members = append(members, m)
+	}
+	if members == nil {
+		members = []ProjectMember{}
+	}
+	return members, nil
+}
+
+// AddProjectMemberByEmail adds or updates a user's role in a project (owner or editor only)
+func (s *Service) AddProjectMemberByEmail(ctx context.Context, projectID, requesterUserID, targetEmail, role string) (*ProjectMember, error) {
+	reqRole, err := s.GetUserRole(ctx, projectID, requesterUserID)
+	if err != nil {
+		return nil, err
+	}
+	if reqRole != RoleOwner && reqRole != RoleEditor {
+		return nil, errors.New("only project owners and editors can add collaborators")
+	}
+
+	if role != string(RoleEditor) && role != string(RoleViewer) {
+		role = string(RoleEditor)
+	}
+
+	// Look up target user in "user" table
+	var targetID, targetName, email string
+	findUserQuery := `SELECT id, name, email FROM "user" WHERE LOWER(email) = LOWER($1);`
+	err = s.db.QueryRow(ctx, findUserQuery, targetEmail).Scan(&targetID, &targetName, &email)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("user with email %q not found. Please ask them to sign up for Openleaf first", targetEmail)
+		}
+		return nil, fmt.Errorf("failed to search user: %w", err)
+	}
+
+	// Cannot change owner role
+	var currentRole string
+	err = s.db.QueryRow(ctx, `SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2`, projectID, targetID).Scan(&currentRole)
+	if err == nil && currentRole == string(RoleOwner) {
+		return nil, errors.New("cannot change role of the project owner")
+	}
+
+	// Insert or update role
+	upsertQuery := `
+		INSERT INTO project_members (project_id, user_id, role)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (project_id, user_id)
+		DO UPDATE SET role = EXCLUDED.role
+		RETURNING created_at;
+	`
+	var createdAt time.Time
+	err = s.db.QueryRow(ctx, upsertQuery, projectID, targetID, role).Scan(&createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add collaborator: %w", err)
+	}
+
+	return &ProjectMember{
+		UserID:    targetID,
+		Email:     email,
+		Name:      targetName,
+		Role:      role,
+		CreatedAt: createdAt,
+	}, nil
+}
+
+// RemoveProjectMember removes a collaborator from the project (owner only)
+func (s *Service) RemoveProjectMember(ctx context.Context, projectID, requesterUserID, targetUserID string) error {
+	reqRole, err := s.GetUserRole(ctx, projectID, requesterUserID)
+	if err != nil {
+		return err
+	}
+	if reqRole != RoleOwner {
+		return errors.New("only the project owner can remove collaborators")
+	}
+
+	if requesterUserID == targetUserID {
+		return errors.New("cannot remove the owner from their own project")
+	}
+
+	res, err := s.db.Exec(ctx, "DELETE FROM project_members WHERE project_id = $1 AND user_id = $2", projectID, targetUserID)
+	if err != nil {
+		return fmt.Errorf("failed to remove collaborator: %w", err)
+	}
+	if res.RowsAffected() == 0 {
+		return errors.New("member not found in project")
+	}
+
+	return nil
+}

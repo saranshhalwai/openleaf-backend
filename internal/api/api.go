@@ -102,6 +102,13 @@ func (api *API) Router(allowedOrigins []string) http.Handler {
 						r.Delete("/", api.handleDeleteFile)
 					})
 				})
+
+				// Member routes within a project
+				r.Route("/members", func(r chi.Router) {
+					r.Get("/", api.handleListProjectMembers)
+					r.Post("/", api.handleAddProjectMember)
+					r.Delete("/{memberUserId}", api.handleRemoveProjectMember)
+				})
 			})
 		})
 	})

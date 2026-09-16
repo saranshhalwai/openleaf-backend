@@ -206,3 +206,51 @@ func (api *API) handleDeleteFile(w http.ResponseWriter, r *http.Request) {
 
 	respondJSON(w, http.StatusOK, map[string]string{"message": "file deleted"})
 }
+
+// Project members handlers
+func (api *API) handleListProjectMembers(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectId")
+	user, _ := auth.GetUser(r.Context())
+
+	members, err := api.projects.ListProjectMembers(r.Context(), projectID, user.ID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, members)
+}
+
+type addMemberReq struct {
+	Email string `json:"email"`
+	Role  string `json:"role"`
+}
+
+func (api *API) handleAddProjectMember(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectId")
+	user, _ := auth.GetUser(r.Context())
+
+	var req addMemberReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" {
+		respondError(w, http.StatusBadRequest, "valid email is required")
+		return
+	}
+
+	member, err := api.projects.AddProjectMemberByEmail(r.Context(), projectID, user.ID, req.Email, req.Role)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusCreated, member)
+}
+
+func (api *API) handleRemoveProjectMember(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectId")
+	targetUserID := chi.URLParam(r, "memberUserId")
+	user, _ := auth.GetUser(r.Context())
+
+	if err := api.projects.RemoveProjectMember(r.Context(), projectID, user.ID, targetUserID); err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"message": "member removed"})
+}
