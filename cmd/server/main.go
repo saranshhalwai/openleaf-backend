@@ -15,6 +15,7 @@ import (
 
 	"openleaf-backend/internal/api"
 	"openleaf-backend/internal/auth"
+	"openleaf-backend/internal/collab"
 	"openleaf-backend/internal/compilation"
 	"openleaf-backend/internal/database"
 	"openleaf-backend/internal/files"
@@ -99,8 +100,12 @@ func main() {
 	})
 	defer compilationService.Close()
 
+	// Initialize real-time collaboration hub and WebSocket handler
+	collabHub := collab.NewHub()
+	collabHandler := collab.NewHandler(collabHub, authenticator, projectsService)
+
 	// Build HTTP router
-	apiServer := api.New(authenticator, projectsService, filesService, compilationService)
+	apiServer := api.New(authenticator, projectsService, filesService, compilationService, collabHandler)
 	router := apiServer.Router(allowedOrigins)
 
 	srv := &http.Server{

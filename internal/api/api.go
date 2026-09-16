@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/cors"
 
 	"openleaf-backend/internal/auth"
+	"openleaf-backend/internal/collab"
 	"openleaf-backend/internal/compilation"
 	"openleaf-backend/internal/files"
 	"openleaf-backend/internal/projects"
@@ -19,14 +20,16 @@ type API struct {
 	projects    *projects.Service
 	files       *files.Service
 	compilation *compilation.Service
+	collab      *collab.Handler
 }
 
-func New(a *auth.Authenticator, p *projects.Service, f *files.Service, c *compilation.Service) *API {
+func New(a *auth.Authenticator, p *projects.Service, f *files.Service, c *compilation.Service, cl *collab.Handler) *API {
 	return &API{
 		auth:        a,
 		projects:    p,
 		files:       f,
 		compilation: c,
+		collab:      cl,
 	}
 }
 
@@ -54,6 +57,10 @@ func (api *API) Router(allowedOrigins []string) http.Handler {
 	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+
+	// Real-time collaborative editing WebSocket endpoint
+	// Authenticates token parameter and checks project membership within handler
+	r.Get("/api/projects/{projectId}/files/{fileId}/collaborate", api.collab.HandleWebSocket)
 
 	// Webhook callback endpoint for compiler service (unauthenticated by Better-Auth)
 	r.Post("/api/internal/compile/callback", api.handleCompileCallback)

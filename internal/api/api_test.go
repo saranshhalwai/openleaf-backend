@@ -15,6 +15,7 @@ import (
 
 	"openleaf-backend/internal/api"
 	"openleaf-backend/internal/auth"
+	"openleaf-backend/internal/collab"
 	"openleaf-backend/internal/compilation"
 	"openleaf-backend/internal/database"
 	"openleaf-backend/internal/files"
@@ -69,7 +70,9 @@ func TestAPIEndpoints(t *testing.T) {
 	filesSvc := files.NewService(db.Pool)
 	compSvc := compilation.NewService(context.Background(), db.Pool, filesSvc, compilation.Config{})
 	defer compSvc.Close()
-	server := api.New(authSvc, projSvc, filesSvc, compSvc)
+	collabHub := collab.NewHub()
+	collabHandler := collab.NewHandler(collabHub, authSvc, projSvc)
+	server := api.New(authSvc, projSvc, filesSvc, compSvc, collabHandler)
 	router := server.Router([]string{"http://localhost:5173"})
 
 	// Test 1: Health check (public)
