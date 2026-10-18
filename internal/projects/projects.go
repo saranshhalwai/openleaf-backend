@@ -37,22 +37,6 @@ func NewService(db *pgxpool.Pool) *Service {
 	return &Service{db: db}
 }
 
-const defaultMainTeX = `\documentclass{article}
-\usepackage[utf8]{inputenc}
-
-\title{My Openleaf Document}
-\author{Openleaf Collaborator}
-\date{\today}
-
-\begin{document}
-
-\maketitle
-
-\section{Introduction}
-Welcome to your new Openleaf LaTeX project! Start typing here to write your document.
-
-\end{document}
-`
 
 // ListUserProjects returns all projects where the user is an owner, editor, or viewer
 func (s *Service) ListUserProjects(ctx context.Context, userID string) ([]Project, error) {
@@ -86,11 +70,13 @@ func (s *Service) ListUserProjects(ctx context.Context, userID string) ([]Projec
 	return projects, nil
 }
 
-// CreateProject creates a project, associates the owner, and generates a default main.tex file
-func (s *Service) CreateProject(ctx context.Context, userID, name string) (*Project, error) {
+// CreateProject creates a project, associates the owner, and generates starter files from the selected template
+func (s *Service) CreateProject(ctx context.Context, userID, name, templateID string) (*Project, error) {
 	if name == "" {
 		name = "Untitled Project"
 	}
+
+	tpl := GetTemplate(templateID)
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -99,7 +85,6 @@ func (s *Service) CreateProject(ctx context.Context, userID, name string) (*Proj
 	defer tx.Rollback(ctx)
 
 	projectID := uuid.New().String()
-	fileID := uuid.New().String()
 
 	// 1. Insert project
 	var p Project
@@ -124,26 +109,35 @@ func (s *Service) CreateProject(ctx context.Context, userID, name string) (*Proj
 		return nil, fmt.Errorf("failed to insert project member: %w", err)
 	}
 
-	// 3. Create default main.tex file
+	// 3. Create starter template files
+	var rootFileID string
 	fileQuery := `
 		INSERT INTO files (id, project_id, path, is_binary, content)
-		VALUES ($1, $2, 'main.tex', FALSE, $3);
+		VALUES ($1, $2, $3, FALSE, $4);
 	`
-	if _, err := tx.Exec(ctx, fileQuery, fileID, projectID, defaultMainTeX); err != nil {
-		return nil, fmt.Errorf("failed to insert main.tex: %w", err)
+	for _, tf := range tpl.Files {
+		newFileID := uuid.New().String()
+		if _, err := tx.Exec(ctx, fileQuery, newFileID, projectID, tf.Path, tf.Content); err != nil {
+			return nil, fmt.Errorf("failed to insert template file %s: %w", tf.Path, err)
+		}
+		if tf.Path == tpl.RootFile || rootFileID == "" {
+			rootFileID = newFileID
+		}
 	}
 
 	// 4. Update root_file_id
-	updateRootQuery := `UPDATE projects SET root_file_id = $1 WHERE id = $2;`
-	if _, err := tx.Exec(ctx, updateRootQuery, fileID, projectID); err != nil {
-		return nil, fmt.Errorf("failed to set root file: %w", err)
+	if rootFileID != "" {
+		updateRootQuery := `UPDATE projects SET root_file_id = $1 WHERE id = $2;`
+		if _, err := tx.Exec(ctx, updateRootQuery, rootFileID, projectID); err != nil {
+			return nil, fmt.Errorf("failed to set root file: %w", err)
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	p.RootFileID = &fileID
+	p.RootFileID = &rootFileID
 	p.Role = "owner"
 	return &p, nil
 }

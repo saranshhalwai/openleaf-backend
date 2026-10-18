@@ -49,7 +49,7 @@ func TestProjectAndFileLifecycle(t *testing.T) {
 	filesSvc := files.NewService(db.Pool)
 
 	// 2. Create Project
-	p, err := projSvc.CreateProject(ctx, testUserID, "Test LaTeX Project")
+	p, err := projSvc.CreateProject(ctx, testUserID, "Test LaTeX Project", "article")
 	if err != nil {
 		t.Fatalf("Failed to create project: %v", err)
 	}

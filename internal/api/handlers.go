@@ -3,7 +3,10 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -57,7 +60,8 @@ func (api *API) handleListProjects(w http.ResponseWriter, r *http.Request) {
 }
 
 type createProjectReq struct {
-	Name string `json:"name"`
+	Name     string `json:"name"`
+	Template string `json:"template"`
 }
 
 func (api *API) handleCreateProject(w http.ResponseWriter, r *http.Request) {
@@ -68,13 +72,18 @@ func (api *API) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p, err := api.projects.CreateProject(r.Context(), user.ID, req.Name)
+	p, err := api.projects.CreateProject(r.Context(), user.ID, req.Name, req.Template)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	respondJSON(w, http.StatusCreated, p)
+}
+
+func (api *API) handleListTemplates(w http.ResponseWriter, r *http.Request) {
+	templates := projects.ListTemplates()
+	respondJSON(w, http.StatusOK, templates)
 }
 
 func (api *API) handleGetProject(w http.ResponseWriter, r *http.Request) {
@@ -254,3 +263,33 @@ func (api *API) handleRemoveProjectMember(w http.ResponseWriter, r *http.Request
 	}
 	respondJSON(w, http.StatusOK, map[string]string{"message": "member removed"})
 }
+
+// handleExportProject streams project files as a ZIP archive
+func (api *API) handleExportProject(w http.ResponseWriter, r *http.Request) {
+	projectID := chi.URLParam(r, "projectId")
+	user, ok := auth.GetUser(r.Context())
+	if !ok || user == nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	p, err := api.projects.GetProject(r.Context(), projectID, user.ID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "project not found")
+		return
+	}
+
+	zipBytes, err := api.files.ExportZip(r.Context(), projectID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to export project archive")
+		return
+	}
+
+	filename := fmt.Sprintf("%s.zip", strings.ReplaceAll(p.Name, " ", "_"))
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	w.Header().Set("Content-Length", strconv.Itoa(len(zipBytes)))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(zipBytes)
+}
+

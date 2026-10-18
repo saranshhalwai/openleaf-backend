@@ -1,6 +1,8 @@
 package files
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -102,6 +104,45 @@ func (s *Service) ListFilesWithContent(ctx context.Context, projectID string) ([
 	}
 
 	return fileList, nil
+}
+
+// ExportZip bundles all files in the project into an in-memory ZIP archive.
+func (s *Service) ExportZip(ctx context.Context, projectID string) ([]byte, error) {
+	fileList, err := s.ListFilesWithContent(ctx, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list project files: %w", err)
+	}
+
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+
+	for _, f := range fileList {
+		var data []byte
+		if f.Content != nil {
+			data = []byte(*f.Content)
+		}
+
+		header := &zip.FileHeader{
+			Name:     f.Path,
+			Method:   zip.Deflate,
+			Modified: f.UpdatedAt,
+		}
+
+		writer, err := zw.CreateHeader(header)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create zip header for %s: %w", f.Path, err)
+		}
+
+		if _, err := writer.Write(data); err != nil {
+			return nil, fmt.Errorf("failed to write zip content for %s: %w", f.Path, err)
+		}
+	}
+
+	if err := zw.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close zip archive: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
 
 // GetFile retrieves a specific file including content

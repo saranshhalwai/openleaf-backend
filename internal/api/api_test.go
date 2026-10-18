@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -145,7 +146,39 @@ func TestAPIEndpoints(t *testing.T) {
 		t.Fatalf("Expected 201 for creating file, got %d: %s", w.Code, w.Body.String())
 	}
 
-	// Test 7: Clean up project
+	// Test 7: Export project as ZIP
+	req = httptest.NewRequest(http.MethodGet, "/api/projects/"+createdProj.ID+"/export", nil)
+	req.Header.Set("Authorization", "Bearer "+testSessionToken)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200 for exporting project zip, got %d: %s", w.Code, w.Body.String())
+	}
+	if w.Header().Get("Content-Type") != "application/zip" {
+		t.Errorf("Expected application/zip content type, got %s", w.Header().Get("Content-Type"))
+	}
+	zipReader, err := zip.NewReader(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
+	if err != nil {
+		t.Fatalf("Failed to parse returned zip archive: %v", err)
+	}
+	foundMain := false
+	foundBib := false
+	for _, zf := range zipReader.File {
+		if zf.Name == "main.tex" {
+			foundMain = true
+		}
+		if zf.Name == "references.bib" {
+			foundBib = true
+		}
+	}
+	if !foundMain {
+		t.Errorf("Expected main.tex in exported zip")
+	}
+	if !foundBib {
+		t.Errorf("Expected references.bib in exported zip")
+	}
+
+	// Test 8: Clean up project
 	req = httptest.NewRequest(http.MethodDelete, "/api/projects/"+createdProj.ID, nil)
 	req.Header.Set("Authorization", "Bearer "+testSessionToken)
 	w = httptest.NewRecorder()

@@ -50,7 +50,7 @@ func TestCompilationTarballAndJob(t *testing.T) {
 	defer compSvc.Close()
 
 	// 1. Create a project
-	proj, err := projSvc.CreateProject(ctx, testUserID, "LaTeX Test Project")
+	proj, err := projSvc.CreateProject(ctx, testUserID, "LaTeX Test Project", "article")
 	if err != nil {
 		t.Fatalf("Failed to create project: %v", err)
 	}

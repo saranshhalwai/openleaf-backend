@@ -72,6 +72,9 @@ func (api *API) Router(allowedOrigins []string) http.Handler {
 		// Current authenticated user info
 		r.Get("/me", api.handleMe)
 
+		// Starter templates
+		r.Get("/templates", api.handleListTemplates)
+
 		// Project routes
 		r.Route("/projects", func(r chi.Router) {
 			r.Get("/", api.handleListProjects)
@@ -82,6 +85,7 @@ func (api *API) Router(allowedOrigins []string) http.Handler {
 
 				r.Get("/", api.handleGetProject)
 				r.Delete("/", api.handleDeleteProject)
+				r.Get("/export", api.handleExportProject)
 
 				// Compilation routes
 				r.Route("/compile", func(r chi.Router) {
