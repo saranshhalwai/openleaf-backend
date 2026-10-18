@@ -1,7 +1,7 @@
 # Openleaf Backend 🍃
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/saranshhalwai/openleaf-backend)](https://goreportcard.com/report/github.com/saranshhalwai/openleaf-backend)
-[![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/badge/release-v1.0.0-blue.svg)](https://github.com/saranshhalwai/openleaf-backend/releases)
 
 The high-performance Go backend service for **Openleaf** — an open-source, modern collaborative LaTeX editor built with cloud-native scalability, real-time Yjs CRDT synchronization, and asynchronous sandboxed TeX Live compilation.
@@ -147,4 +147,4 @@ gcloud run deploy openleaf-backend \
 
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [Apache License, Version 2.0](LICENSE).
